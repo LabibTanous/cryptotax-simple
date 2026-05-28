@@ -135,10 +135,10 @@ function ResultsContent() {
             <div className="w-7 h-7 bg-indigo-600 rounded-md flex items-center justify-center">
               <span className="text-white text-xs font-bold">₿</span>
             </div>
-            <span className="font-semibold text-slate-900">CryptoTax Simple</span>
+            <span className="font-semibold text-slate-900 hidden sm:inline">CryptoTax Simple</span>
           </Link>
           <div className="flex items-center gap-3">
-            <Link href="/upload" className="text-sm text-slate-500 hover:text-slate-700 flex items-center gap-1">
+            <Link href="/upload" className="hidden sm:flex text-sm text-slate-500 hover:text-slate-700 items-center gap-1">
               ← Upload another file
             </Link>
             <button
@@ -162,16 +162,16 @@ function ResultsContent() {
 
       <div className="max-w-6xl mx-auto px-6 py-10">
         {/* Header */}
-        <div className="flex items-start justify-between mb-8">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900 mb-1">Your Tax Report</h1>
-            <p className="text-slate-500 text-sm">
+        <div className="flex items-start justify-between mb-8 gap-4">
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl font-bold text-slate-900 mb-1">Your Tax Report</h1>
+            <p className="text-slate-500 text-xs sm:text-sm truncate">
               {exchange && <span className="capitalize">{exchange}</span>}
-              {filename && <span> · {filename}</span>}
-              <span> · {summary.totalTransactions} total transactions · FIFO method</span>
+              {filename && <span className="hidden sm:inline"> · {filename}</span>}
+              <span> · {summary.totalTransactions} transactions · FIFO</span>
             </p>
           </div>
-          <div className="text-right text-sm text-slate-400">
+          <div className="text-right text-xs sm:text-sm text-slate-400 flex-shrink-0">
             Tax year {new Date().getFullYear() - 1}
           </div>
         </div>
@@ -249,16 +249,16 @@ function ResultsContent() {
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-1 bg-slate-100 p-1 rounded-xl mb-6 w-fit no-print">
+        <div className="flex gap-1 bg-slate-100 p-1 rounded-xl mb-6 w-full sm:w-fit no-print">
           {(['summary', 'events', 'assets'] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors capitalize ${
+              className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors ${
                 activeTab === tab ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
               }`}
             >
-              {tab === 'events' ? `Taxable Events (${summary.taxableEvents.length})` :
+              {tab === 'events' ? `Events (${summary.taxableEvents.length})` :
                tab === 'assets' ? `Assets (${assetList.length})` : 'Summary'}
             </button>
           ))}

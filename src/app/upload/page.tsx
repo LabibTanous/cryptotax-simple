@@ -142,7 +142,7 @@ export default function UploadPage() {
             </div>
             <span className="font-semibold text-slate-900">CryptoTax Simple</span>
           </Link>
-          <div className="flex items-center gap-2 text-sm text-slate-500">
+          <div className="hidden sm:flex items-center gap-2 text-sm text-slate-500">
             <span className="w-6 h-6 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center text-xs font-bold">1</span>
             <span className="text-slate-700 font-medium">Upload</span>
             <span className="text-slate-300 mx-1">→</span>
@@ -151,6 +151,13 @@ export default function UploadPage() {
             <span className="text-slate-300 mx-1">→</span>
             <span className="w-6 h-6 bg-slate-100 text-slate-400 rounded-full flex items-center justify-center text-xs font-bold">3</span>
             <span>Download</span>
+          </div>
+          <div className="flex sm:hidden items-center gap-1.5 text-xs text-slate-500">
+            <span className="w-5 h-5 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center font-bold">1</span>
+            <span className="text-slate-300">→</span>
+            <span className="w-5 h-5 bg-slate-100 text-slate-400 rounded-full flex items-center justify-center font-bold">2</span>
+            <span className="text-slate-300">→</span>
+            <span className="w-5 h-5 bg-slate-100 text-slate-400 rounded-full flex items-center justify-center font-bold">3</span>
           </div>
         </div>
       </nav>
