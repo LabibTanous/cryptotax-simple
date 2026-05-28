@@ -455,6 +455,12 @@ function ResultsContent() {
               <p className="text-indigo-300 text-sm mt-3">
                 One-time · {summary.taxableEvents.length} taxable events · all assets · secure checkout via Stripe
               </p>
+              <button
+                onClick={() => { setIsPaid(true); sessionStorage.setItem('cryptotax_paid', 'true') }}
+                className="mt-4 text-indigo-400 hover:text-indigo-200 text-xs underline underline-offset-2 transition-colors"
+              >
+                Skip payment (test only)
+              </button>
             </>
           )}
         </div>
