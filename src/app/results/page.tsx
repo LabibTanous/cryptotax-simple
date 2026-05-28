@@ -57,6 +57,10 @@ function ResultsContent() {
   const [isCheckingOut, setIsCheckingOut] = useState(false)
   const [activeTab, setActiveTab] = useState<'summary' | 'events' | 'assets'>('summary')
   const [isPaid, setIsPaid] = useState(false)
+  const [emailGate, setEmailGate] = useState(false)
+  const [email, setEmail] = useState('')
+  const [emailSubmitting, setEmailSubmitting] = useState(false)
+  const [emailDone, setEmailDone] = useState(false)
 
   useEffect(() => {
     const raw = sessionStorage.getItem('cryptotax_summary')
@@ -71,11 +75,43 @@ function ResultsContent() {
     // Check if returning from Stripe with paid=true
     if (searchParams.get('paid') === 'true') {
       setIsPaid(true)
+      setEmailDone(true)
       sessionStorage.setItem('cryptotax_paid', 'true')
+      sessionStorage.setItem('cryptotax_email_done', 'true')
     } else if (sessionStorage.getItem('cryptotax_paid') === 'true') {
       setIsPaid(true)
     }
+
+    // Show email gate if not already done
+    if (sessionStorage.getItem('cryptotax_email_done') !== 'true') {
+      setEmailGate(true)
+    } else {
+      setEmailDone(true)
+    }
   }, [router, searchParams])
+
+  const handleEmailSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!summary || !email.includes('@')) return
+    setEmailSubmitting(true)
+    try {
+      await fetch('/api/capture-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email,
+          totalGains: summary.totalGains,
+          shortTermGains: summary.shortTermGains,
+          longTermGains: summary.longTermGains,
+          taxableEvents: summary.taxableEvents.length,
+        }),
+      })
+    } catch { /* silent fail */ }
+    sessionStorage.setItem('cryptotax_email_done', 'true')
+    setEmailGate(false)
+    setEmailDone(true)
+    setEmailSubmitting(false)
+  }
 
   const handleDownload = async () => {
     if (!summary) return
@@ -117,6 +153,63 @@ function ResultsContent() {
   }
 
   if (!summary) return null
+
+  // Email gate overlay
+  if (emailGate && !emailDone) {
+    const estimatedTax = Math.max(0, summary.shortTermGains) * 0.22 + Math.max(0, summary.longTermGains) * 0.15
+    return (
+      <div className="min-h-screen bg-slate-900/80 backdrop-blur-sm flex items-center justify-center px-4">
+        <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl">
+          <div className="text-center mb-6">
+            <div className="w-14 h-14 bg-indigo-100 rounded-2xl flex items-center justify-center text-2xl mx-auto mb-4">📊</div>
+            <h2 className="text-2xl font-bold text-slate-900 mb-2">Your results are ready</h2>
+            <p className="text-slate-500 text-sm">Enter your email to view your full tax report. We'll also send you a reminder before next tax season.</p>
+          </div>
+
+          {/* Teaser numbers — blurred */}
+          <div className="grid grid-cols-2 gap-3 mb-6">
+            <div className="bg-slate-50 rounded-xl p-3 text-center">
+              <p className="text-xs text-slate-500 mb-1">Total Gain/Loss</p>
+              <p className={`text-lg font-bold ${summary.totalGains >= 0 ? 'text-red-500' : 'text-emerald-500'}`}>
+                {fmt(summary.totalGains)}
+              </p>
+            </div>
+            <div className="bg-slate-50 rounded-xl p-3 text-center">
+              <p className="text-xs text-slate-500 mb-1">Est. Tax Owed</p>
+              <p className="text-lg font-bold text-slate-900">{fmt(estimatedTax)}</p>
+            </div>
+          </div>
+
+          <form onSubmit={handleEmailSubmit} className="space-y-3">
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="your@email.com"
+              required
+              className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            />
+            <button
+              type="submit"
+              disabled={emailSubmitting || !email.includes('@')}
+              className="w-full bg-indigo-600 text-white font-semibold py-3 rounded-xl hover:bg-indigo-700 transition-colors disabled:opacity-60"
+            >
+              {emailSubmitting ? 'Loading...' : 'View My Tax Report →'}
+            </button>
+          </form>
+
+          <button
+            onClick={() => { setEmailGate(false); setEmailDone(true); sessionStorage.setItem('cryptotax_email_done', 'true') }}
+            className="mt-3 w-full text-center text-xs text-slate-400 hover:text-slate-600 transition-colors"
+          >
+            Skip for now
+          </button>
+
+          <p className="text-center text-xs text-slate-400 mt-4">No spam. Unsubscribe anytime.</p>
+        </div>
+      </div>
+    )
+  }
 
   const estimatedShortTax = Math.max(0, summary.shortTermGains) * 0.22
   const estimatedLongTax = Math.max(0, summary.longTermGains) * 0.15
