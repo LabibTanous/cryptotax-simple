@@ -250,7 +250,11 @@ export default function LandingPage() {
             <span className="font-semibold text-slate-700">CryptoTax Simple</span>
           </div>
           <p className="text-xs text-slate-400 text-center">Not tax advice. Consult a licensed tax professional for complex situations.</p>
-          <p className="text-xs text-slate-400">© 2025 CryptoTax Simple</p>
+          <div className="flex items-center gap-4 text-xs text-slate-400">
+            <Link href="/privacy" className="hover:text-slate-600 transition-colors">Privacy Policy</Link>
+            <Link href="/terms" className="hover:text-slate-600 transition-colors">Terms of Service</Link>
+            <span>© 2025 CryptoTax Simple</span>
+          </div>
         </div>
       </footer>
     </div>

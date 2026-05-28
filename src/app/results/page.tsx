@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useEffect, useState, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import type { TaxSummary } from '@/lib/types'
 import { downloadForm8949PDF } from '@/lib/report/form8949'
@@ -19,13 +19,44 @@ function fmtNum(n: number, decimals = 6): string {
   return n.toFixed(decimals).replace(/\.?0+$/, '')
 }
 
+function recommendedPlan(count: number): 'simple' | 'standard' | 'pro' {
+  if (count <= 100) return 'simple'
+  if (count <= 500) return 'standard'
+  return 'pro'
+}
+
+const PLAN_PRICES: Record<string, string> = { simple: '$29', standard: '$49', pro: '$99' }
+const PLAN_LABELS: Record<string, string> = {
+  simple: 'Simple — up to 100 transactions',
+  standard: 'Standard — up to 500 transactions',
+  pro: 'Pro — unlimited transactions',
+}
+
 export default function ResultsPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
+          <p className="text-slate-500">Loading your results...</p>
+        </div>
+      </div>
+    }>
+      <ResultsContent />
+    </Suspense>
+  )
+}
+
+function ResultsContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [summary, setSummary] = useState<TaxSummary | null>(null)
   const [exchange, setExchange] = useState<string>('')
   const [filename, setFilename] = useState<string>('')
   const [isDownloading, setIsDownloading] = useState(false)
+  const [isCheckingOut, setIsCheckingOut] = useState(false)
   const [activeTab, setActiveTab] = useState<'summary' | 'events' | 'assets'>('summary')
+  const [isPaid, setIsPaid] = useState(false)
 
   useEffect(() => {
     const raw = sessionStorage.getItem('cryptotax_summary')
@@ -36,10 +67,22 @@ export default function ResultsPage() {
     setSummary(JSON.parse(raw) as TaxSummary)
     setExchange(sessionStorage.getItem('cryptotax_exchange') || '')
     setFilename(sessionStorage.getItem('cryptotax_filename') || 'transaction-history.csv')
-  }, [router])
+
+    // Check if returning from Stripe with paid=true
+    if (searchParams.get('paid') === 'true') {
+      setIsPaid(true)
+      sessionStorage.setItem('cryptotax_paid', 'true')
+    } else if (sessionStorage.getItem('cryptotax_paid') === 'true') {
+      setIsPaid(true)
+    }
+  }, [router, searchParams])
 
   const handleDownload = async () => {
     if (!summary) return
+    if (!isPaid) {
+      handleCheckout()
+      return
+    }
     setIsDownloading(true)
     try {
       await downloadForm8949PDF(summary, filename)
@@ -50,16 +93,30 @@ export default function ResultsPage() {
     setIsDownloading(false)
   }
 
-  if (!summary) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-10 h-10 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
-          <p className="text-slate-500">Loading your results...</p>
-        </div>
-      </div>
-    )
+  const handleCheckout = async () => {
+    if (!summary) return
+    setIsCheckingOut(true)
+    try {
+      const plan = recommendedPlan(summary.taxableEvents.length)
+      const res = await fetch('/api/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plan, transactionCount: summary.taxableEvents.length }),
+      })
+      const data = await res.json() as { url?: string; error?: string }
+      if (data.url) {
+        window.location.href = data.url
+      } else {
+        alert(data.error || 'Checkout failed. Please try again.')
+        setIsCheckingOut(false)
+      }
+    } catch {
+      alert('Checkout failed. Please try again.')
+      setIsCheckingOut(false)
+    }
   }
+
+  if (!summary) return null
 
   const estimatedShortTax = Math.max(0, summary.shortTermGains) * 0.22
   const estimatedLongTax = Math.max(0, summary.longTermGains) * 0.15
@@ -86,13 +143,17 @@ export default function ResultsPage() {
             </Link>
             <button
               onClick={handleDownload}
-              disabled={isDownloading}
+              disabled={isDownloading || isCheckingOut}
               className="bg-indigo-600 text-white text-sm font-semibold px-5 py-2.5 rounded-xl hover:bg-indigo-700 transition-colors disabled:opacity-60 flex items-center gap-2"
             >
               {isDownloading ? (
                 <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> Generating...</>
-              ) : (
+              ) : isCheckingOut ? (
+                <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> Redirecting...</>
+              ) : isPaid ? (
                 <>⬇ Download Form 8949 PDF</>
+              ) : (
+                <>🔒 Unlock PDF — {PLAN_PRICES[recommendedPlan(summary?.taxableEvents.length ?? 0)]}</>
               )}
             </button>
           </div>
@@ -353,22 +414,49 @@ export default function ResultsPage() {
 
         {/* Download CTA */}
         <div className="mt-8 bg-indigo-600 rounded-2xl p-8 text-white text-center no-print">
-          <h3 className="text-xl font-bold mb-2">Ready to file?</h3>
-          <p className="text-indigo-200 mb-6">
-            Download your Form 8949 PDF. Import it directly into TurboTax, or hand it to your accountant.
-          </p>
-          <button
-            onClick={handleDownload}
-            disabled={isDownloading}
-            className="bg-white text-indigo-600 font-bold px-8 py-3.5 rounded-xl hover:bg-indigo-50 transition-colors text-lg disabled:opacity-60 flex items-center gap-2 mx-auto"
-          >
-            {isDownloading ? (
-              <><span className="w-5 h-5 border-2 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></span> Generating PDF...</>
-            ) : (
-              <>⬇ Download Form 8949 PDF — Free Preview</>
-            )}
-          </button>
-          <p className="text-indigo-300 text-sm mt-3">Complete report · {summary.taxableEvents.length} taxable events · all assets</p>
+          {isPaid ? (
+            <>
+              <h3 className="text-xl font-bold mb-2">Ready to download</h3>
+              <p className="text-indigo-200 mb-6">
+                Your Form 8949 PDF is ready. Import into TurboTax or hand to your accountant.
+              </p>
+              <button
+                onClick={handleDownload}
+                disabled={isDownloading}
+                className="bg-white text-indigo-600 font-bold px-8 py-3.5 rounded-xl hover:bg-indigo-50 transition-colors text-lg disabled:opacity-60 flex items-center gap-2 mx-auto"
+              >
+                {isDownloading ? (
+                  <><span className="w-5 h-5 border-2 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></span> Generating PDF...</>
+                ) : (
+                  <>⬇ Download Form 8949 PDF</>
+                )}
+              </button>
+            </>
+          ) : (
+            <>
+              <h3 className="text-xl font-bold mb-2">Ready to file?</h3>
+              <p className="text-indigo-200 mb-2">
+                Unlock your Form 8949 PDF. One-time payment — use it for TurboTax or your accountant.
+              </p>
+              <p className="text-indigo-300 text-sm mb-6">
+                Your plan: <strong className="text-white">{PLAN_LABELS[recommendedPlan(summary.taxableEvents.length)]}</strong>
+              </p>
+              <button
+                onClick={handleCheckout}
+                disabled={isCheckingOut}
+                className="bg-white text-indigo-600 font-bold px-8 py-3.5 rounded-xl hover:bg-indigo-50 transition-colors text-lg disabled:opacity-60 flex items-center gap-2 mx-auto"
+              >
+                {isCheckingOut ? (
+                  <><span className="w-5 h-5 border-2 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></span> Loading checkout...</>
+                ) : (
+                  <>🔒 Unlock PDF — {PLAN_PRICES[recommendedPlan(summary.taxableEvents.length)]}</>
+                )}
+              </button>
+              <p className="text-indigo-300 text-sm mt-3">
+                One-time · {summary.taxableEvents.length} taxable events · all assets · secure checkout via Stripe
+              </p>
+            </>
+          )}
         </div>
       </div>
     </div>
