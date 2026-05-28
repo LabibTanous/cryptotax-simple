@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import type { ExchangeType } from '@/lib/types'
+import type { ExchangeType, RawTransaction } from '@/lib/types'
 import { parseCSV, detectExchange } from '@/lib/parsers'
 import { calculateFIFO } from '@/lib/calculator/fifo'
 
@@ -46,16 +46,24 @@ const EXCHANGES: { id: ExchangeType; name: string; icon: string; color: string; 
   },
 ]
 
+interface LoadedFile {
+  id: string
+  file: File
+  exchange: ExchangeType
+  transactions: RawTransaction[]
+}
+
 export default function UploadPage() {
   const router = useRouter()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [selectedExchange, setSelectedExchange] = useState<ExchangeType | null>(null)
   const [isDragging, setIsDragging] = useState(false)
-  const [file, setFile] = useState<File | null>(null)
+  const [loadedFiles, setLoadedFiles] = useState<LoadedFile[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
+  const [isCalculating, setIsCalculating] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const processFile = useCallback(
+  const addFile = useCallback(
     async (csvFile: File) => {
       setError(null)
       setIsProcessing(true)
@@ -63,14 +71,11 @@ export default function UploadPage() {
       try {
         const text = await csvFile.text()
 
-        // Auto-detect exchange if not manually selected
         let exchange = selectedExchange
         if (!exchange) {
           exchange = detectExchange(text)
           if (!exchange) {
-            setError(
-              'Could not auto-detect exchange format. Please select your exchange manually above.'
-            )
+            setError('Could not auto-detect exchange. Please select your exchange above before uploading.')
             setIsProcessing(false)
             return
           }
@@ -80,29 +85,47 @@ export default function UploadPage() {
         const transactions = parseCSV(text, exchange)
 
         if (transactions.length === 0) {
-          setError(
-            'No transactions found in this file. Make sure you exported the correct CSV type from your exchange.'
-          )
+          setError('No transactions found. Make sure you exported the correct CSV type from your exchange.')
           setIsProcessing(false)
           return
         }
 
-        const summary = calculateFIFO(transactions)
-
-        // Store in sessionStorage for results page
-        sessionStorage.setItem('cryptotax_summary', JSON.stringify(summary))
-        sessionStorage.setItem('cryptotax_exchange', exchange)
-        sessionStorage.setItem('cryptotax_filename', csvFile.name)
-
-        router.push('/results')
+        // Check for duplicate exchange (replace if same exchange re-uploaded)
+        setLoadedFiles((prev) => {
+          const filtered = prev.filter((f) => f.exchange !== exchange)
+          return [...filtered, { id: crypto.randomUUID(), file: csvFile, exchange: exchange!, transactions }]
+        })
+        setSelectedExchange(null) // reset for next file
       } catch (err) {
         console.error(err)
         setError('Error reading file. Please make sure it is a valid CSV file.')
-        setIsProcessing(false)
       }
+      setIsProcessing(false)
     },
-    [selectedExchange, router]
+    [selectedExchange]
   )
+
+  const removeFile = (id: string) => {
+    setLoadedFiles((prev) => prev.filter((f) => f.id !== id))
+  }
+
+  const calculateAll = () => {
+    if (loadedFiles.length === 0) return
+    setIsCalculating(true)
+
+    const allTransactions = loadedFiles.flatMap((f) => f.transactions)
+    const summary = calculateFIFO(allTransactions)
+
+    const exchangeNames = loadedFiles.map((f) => f.exchange).join('+')
+    const fileNames = loadedFiles.map((f) => f.file.name).join(', ')
+
+    sessionStorage.setItem('cryptotax_summary', JSON.stringify(summary))
+    sessionStorage.setItem('cryptotax_exchange', exchangeNames)
+    sessionStorage.setItem('cryptotax_filename', fileNames)
+    sessionStorage.removeItem('cryptotax_paid')
+
+    router.push('/results')
+  }
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
@@ -114,22 +137,22 @@ export default function UploadPage() {
           setError('Please upload a CSV file.')
           return
         }
-        setFile(dropped)
-        processFile(dropped)
+        addFile(dropped)
       }
     },
-    [processFile]
+    [addFile]
   )
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files?.[0]
     if (selected) {
-      setFile(selected)
-      processFile(selected)
+      addFile(selected)
+      e.target.value = ''
     }
   }
 
   const selectedExchangeData = EXCHANGES.find((ex) => ex.id === selectedExchange)
+  const totalTransactions = loadedFiles.reduce((s, f) => s + f.transactions.length, 0)
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -164,38 +187,50 @@ export default function UploadPage() {
 
       <div className="max-w-4xl mx-auto px-6 py-12">
         <div className="text-center mb-10">
-          <h1 className="text-3xl font-bold text-slate-900 mb-2">Upload your CSV file</h1>
-          <p className="text-slate-500">Select your exchange, then drag and drop your transaction history CSV.</p>
+          <h1 className="text-3xl font-bold text-slate-900 mb-2">Upload your CSV files</h1>
+          <p className="text-slate-500">Add one file per exchange. We combine everything into one tax report.</p>
         </div>
 
         {/* Exchange selector */}
         <div className="mb-8">
           <p className="text-sm font-semibold text-slate-700 mb-3">Step 1 — Select your exchange</p>
           <div className="grid grid-cols-3 gap-4">
-            {EXCHANGES.map((ex) => (
-              <button
-                key={ex.id}
-                onClick={() => setSelectedExchange(ex.id)}
-                className={`flex flex-col items-center gap-2 p-5 rounded-2xl border-2 transition-all cursor-pointer ${
-                  selectedExchange === ex.id
-                    ? 'border-indigo-500 bg-indigo-50 shadow-sm'
-                    : 'border-slate-200 bg-white hover:border-slate-300'
-                }`}
-              >
-                <span className="text-3xl">{ex.icon}</span>
-                <span className={`font-semibold text-sm ${selectedExchange === ex.id ? 'text-indigo-700' : 'text-slate-700'}`}>
-                  {ex.name}
-                </span>
-                {selectedExchange === ex.id && (
-                  <span className="text-xs text-indigo-500 font-medium">Selected ✓</span>
-                )}
-              </button>
-            ))}
+            {EXCHANGES.map((ex) => {
+              const alreadyLoaded = loadedFiles.some((f) => f.exchange === ex.id)
+              return (
+                <button
+                  key={ex.id}
+                  onClick={() => setSelectedExchange(selectedExchange === ex.id ? null : ex.id)}
+                  className={`flex flex-col items-center gap-2 p-5 rounded-2xl border-2 transition-all cursor-pointer relative ${
+                    alreadyLoaded
+                      ? 'border-emerald-400 bg-emerald-50'
+                      : selectedExchange === ex.id
+                      ? 'border-indigo-500 bg-indigo-50 shadow-sm'
+                      : 'border-slate-200 bg-white hover:border-slate-300'
+                  }`}
+                >
+                  {alreadyLoaded && (
+                    <span className="absolute top-2 right-2 text-emerald-500 text-xs font-bold">✓</span>
+                  )}
+                  <span className="text-3xl">{ex.icon}</span>
+                  <span className={`font-semibold text-sm ${alreadyLoaded ? 'text-emerald-700' : selectedExchange === ex.id ? 'text-indigo-700' : 'text-slate-700'}`}>
+                    {ex.name}
+                  </span>
+                  {alreadyLoaded ? (
+                    <span className="text-xs text-emerald-600 font-medium">
+                      {loadedFiles.find((f) => f.exchange === ex.id)?.transactions.length} txns loaded
+                    </span>
+                  ) : selectedExchange === ex.id ? (
+                    <span className="text-xs text-indigo-500 font-medium">Selected ✓</span>
+                  ) : null}
+                </button>
+              )
+            })}
           </div>
         </div>
 
         {/* Instructions */}
-        {selectedExchangeData && (
+        {selectedExchangeData && !loadedFiles.some((f) => f.exchange === selectedExchange) && (
           <div className={`mb-8 rounded-xl border-2 ${selectedExchangeData.color} p-5`}>
             <p className="text-sm font-semibold text-slate-700 mb-3">
               How to export from {selectedExchangeData.name}:
@@ -213,19 +248,46 @@ export default function UploadPage() {
           </div>
         )}
 
+        {/* Loaded files list */}
+        {loadedFiles.length > 0 && (
+          <div className="mb-6 space-y-2">
+            {loadedFiles.map((lf) => {
+              const ex = EXCHANGES.find((e) => e.id === lf.exchange)
+              return (
+                <div key={lf.id} className="flex items-center justify-between bg-white border border-emerald-200 rounded-xl px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl">{ex?.icon}</span>
+                    <div>
+                      <p className="text-sm font-semibold text-slate-800 capitalize">{lf.exchange}</p>
+                      <p className="text-xs text-slate-400">{lf.file.name} · {lf.transactions.length} transactions</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => removeFile(lf.id)}
+                    className="text-slate-400 hover:text-red-500 transition-colors text-lg leading-none"
+                    title="Remove"
+                  >
+                    ×
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        )}
+
         {/* Upload zone */}
         <div className="mb-6">
-          <p className="text-sm font-semibold text-slate-700 mb-3">Step 2 — Upload your CSV file</p>
+          <p className="text-sm font-semibold text-slate-700 mb-3">
+            Step 2 — {loadedFiles.length === 0 ? 'Upload your CSV file' : 'Add another exchange CSV (optional)'}
+          </p>
           <div
             onDragOver={(e) => { e.preventDefault(); setIsDragging(true) }}
             onDragLeave={() => setIsDragging(false)}
             onDrop={handleDrop}
             onClick={() => fileInputRef.current?.click()}
-            className={`relative border-2 border-dashed rounded-2xl p-12 text-center cursor-pointer transition-all ${
+            className={`relative border-2 border-dashed rounded-2xl p-10 text-center cursor-pointer transition-all ${
               isDragging
                 ? 'border-indigo-500 bg-indigo-50'
-                : file
-                ? 'border-emerald-400 bg-emerald-50'
                 : 'border-slate-300 bg-white hover:border-indigo-400 hover:bg-indigo-50/30'
             }`}
           >
@@ -239,14 +301,7 @@ export default function UploadPage() {
             {isProcessing ? (
               <div className="flex flex-col items-center gap-3">
                 <div className="w-10 h-10 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
-                <p className="text-slate-600 font-medium">Calculating your taxes...</p>
-                <p className="text-sm text-slate-400">Running FIFO calculations</p>
-              </div>
-            ) : file ? (
-              <div className="flex flex-col items-center gap-2">
-                <span className="text-4xl">✅</span>
-                <p className="font-semibold text-emerald-700">{file.name}</p>
-                <p className="text-sm text-slate-400">File loaded — processing...</p>
+                <p className="text-slate-600 font-medium">Reading file...</p>
               </div>
             ) : (
               <div className="flex flex-col items-center gap-3">
@@ -255,11 +310,9 @@ export default function UploadPage() {
                 </div>
                 <div>
                   <p className="text-lg font-semibold text-slate-700 mb-1">
-                    Drop your CSV here
+                    {loadedFiles.length === 0 ? 'Drop your CSV here' : '+ Add another CSV'}
                   </p>
-                  <p className="text-sm text-slate-400">
-                    or click to browse · .csv files only
-                  </p>
+                  <p className="text-sm text-slate-400">or click to browse · .csv files only</p>
                 </div>
                 <div className="mt-2 bg-indigo-600 text-white text-sm font-medium px-5 py-2.5 rounded-lg hover:bg-indigo-700 transition-colors">
                   Choose File
@@ -271,7 +324,7 @@ export default function UploadPage() {
 
         {/* Error */}
         {error && (
-          <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-red-700 text-sm flex items-start gap-3">
+          <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-red-700 text-sm flex items-start gap-3 mb-6">
             <span className="text-lg flex-shrink-0">⚠️</span>
             <div>
               <p className="font-semibold mb-0.5">Error processing file</p>
@@ -280,12 +333,27 @@ export default function UploadPage() {
           </div>
         )}
 
+        {/* Calculate button */}
+        {loadedFiles.length > 0 && (
+          <button
+            onClick={calculateAll}
+            disabled={isCalculating}
+            className="w-full bg-indigo-600 text-white font-bold py-4 rounded-2xl hover:bg-indigo-700 transition-colors text-lg disabled:opacity-60 flex items-center justify-center gap-3 mb-6"
+          >
+            {isCalculating ? (
+              <><span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> Calculating...</>
+            ) : (
+              <>Calculate My Taxes → {totalTransactions} transactions across {loadedFiles.length} exchange{loadedFiles.length > 1 ? 's' : ''}</>
+            )}
+          </button>
+        )}
+
         {/* Privacy note */}
-        <div className="mt-8 flex items-start gap-3 bg-white rounded-xl p-4 border border-slate-200">
+        <div className="flex items-start gap-3 bg-white rounded-xl p-4 border border-slate-200">
           <span className="text-xl flex-shrink-0">🔒</span>
           <div className="text-sm text-slate-500">
             <p className="font-medium text-slate-700 mb-0.5">Your data stays in your browser</p>
-            <p>All calculations run locally using JavaScript. Your CSV file is never sent to our servers. We have zero access to your financial data.</p>
+            <p>All calculations run locally using JavaScript. Your CSV files are never sent to our servers. We have zero access to your financial data.</p>
           </div>
         </div>
       </div>
