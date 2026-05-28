@@ -166,7 +166,7 @@ function ResultsContent() {
             <p className="text-slate-500 text-sm">Enter your email to view your full tax report. We'll also send you a reminder before next tax season.</p>
           </div>
 
-          {/* Teaser numbers — blurred */}
+          {/* Teaser numbers */}
           <div className="grid grid-cols-2 gap-3 mb-6">
             <div className="bg-slate-50 rounded-xl p-3 text-center">
               <p className="text-xs text-slate-500 mb-1">Total Gain/Loss</p>
@@ -219,6 +219,44 @@ function ResultsContent() {
   const shortTermEvents = summary.taxableEvents.filter((e) => !e.isLongTerm)
   const longTermEvents = summary.taxableEvents.filter((e) => e.isLongTerm)
 
+  // Card config with colored left-border accent
+  const cards = [
+    {
+      label: 'Short-Term Gains',
+      badge: 'SHORT-TERM',
+      value: fmt(summary.shortTermGains),
+      sub: `${shortTermEvents.length} events · taxed as income`,
+      valueClass: summary.shortTermGains === 0 ? 'text-slate-400' : summary.shortTermGains >= 0 ? 'text-red-500' : 'text-emerald-500',
+      borderColor: 'border-l-red-400',
+    },
+    {
+      label: 'Long-Term Gains',
+      badge: 'LONG-TERM',
+      value: fmt(summary.longTermGains),
+      sub: `${longTermEvents.length} events · max 20% rate`,
+      valueClass: summary.longTermGains === 0 ? 'text-slate-400' : summary.longTermGains >= 0 ? 'text-red-500' : 'text-emerald-500',
+      borderColor: 'border-l-emerald-400',
+    },
+    {
+      label: 'Total Net Gain/Loss',
+      badge: 'TOTAL',
+      value: fmt(summary.totalGains),
+      sub: 'Combined all assets',
+      valueClass: summary.totalGains === 0 ? 'text-slate-400' : summary.totalGains >= 0 ? 'text-red-500' : 'text-emerald-500',
+      borderColor: 'border-l-indigo-400',
+      ring: true,
+    },
+    {
+      label: 'Estimated Tax Owed',
+      badge: 'ESTIMATE',
+      value: fmt(estimatedTotal),
+      sub: '22% short-term · 15% long-term',
+      valueClass: 'text-slate-900',
+      borderColor: 'border-l-amber-400',
+      isEstimate: true,
+    },
+  ]
+
   return (
     <div className="min-h-screen bg-slate-50">
       {/* Nav */}
@@ -237,7 +275,11 @@ function ResultsContent() {
             <button
               onClick={handleDownload}
               disabled={isDownloading || isCheckingOut}
-              className="bg-indigo-600 text-white text-sm font-semibold px-5 py-2.5 rounded-xl hover:bg-indigo-700 transition-colors disabled:opacity-60 flex items-center gap-2"
+              className={`text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition-colors disabled:opacity-60 flex items-center gap-2 ${
+                isPaid
+                  ? 'bg-emerald-600 hover:bg-emerald-700'
+                  : 'bg-indigo-600 hover:bg-indigo-700'
+              }`}
             >
               {isDownloading ? (
                 <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> Generating...</>
@@ -269,46 +311,15 @@ function ResultsContent() {
           </div>
         </div>
 
-        {/* Summary cards */}
+        {/* Summary cards — premium with colored left border */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          {[
-            {
-              label: 'Short-Term Gains',
-              value: fmt(summary.shortTermGains),
-              sub: `${shortTermEvents.length} events · taxed as income`,
-              positive: summary.shortTermGains >= 0,
-              neutral: summary.shortTermGains === 0,
-            },
-            {
-              label: 'Long-Term Gains',
-              value: fmt(summary.longTermGains),
-              sub: `${longTermEvents.length} events · max 20% rate`,
-              positive: summary.longTermGains >= 0,
-              neutral: summary.longTermGains === 0,
-            },
-            {
-              label: 'Total Net Gain/Loss',
-              value: fmt(summary.totalGains),
-              sub: 'Combined all assets',
-              positive: summary.totalGains >= 0,
-              neutral: summary.totalGains === 0,
-              bold: true,
-            },
-            {
-              label: 'Estimated Tax Owed',
-              value: fmt(estimatedTotal),
-              sub: '22% short-term · 15% long-term',
-              positive: true,
-              isEstimate: true,
-            },
-          ].map((card) => (
-            <div key={card.label} className={`bg-white rounded-2xl p-5 border ${card.bold ? 'border-indigo-200 ring-1 ring-indigo-100' : 'border-slate-200'}`}>
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">{card.label}</p>
-              <p className={`text-2xl font-bold mb-1 ${
-                card.isEstimate ? 'text-slate-900' :
-                card.neutral ? 'text-slate-400' :
-                card.positive ? 'text-red-500' : 'text-emerald-500'
-              }`}>
+          {cards.map((card) => (
+            <div
+              key={card.label}
+              className={`bg-white rounded-2xl p-5 border-l-[3px] border border-slate-200 ${card.borderColor} ${card.ring ? 'ring-1 ring-indigo-100' : ''}`}
+            >
+              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-1">{card.badge}</p>
+              <p className={`text-2xl sm:text-3xl font-bold mb-1 ${card.valueClass}`}>
                 {card.value}
               </p>
               <p className="text-xs text-slate-400">{card.sub}</p>
@@ -333,13 +344,25 @@ function ResultsContent() {
         )}
 
         {/* Disclaimer banner */}
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-8 flex items-start gap-3">
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6 flex items-start gap-3">
           <span className="text-lg flex-shrink-0">⚠️</span>
           <p className="text-sm text-amber-700">
             <strong>Preview only.</strong> Download the full Form 8949 PDF to import into TurboTax or give to your accountant.
             The estimated tax above assumes 22% short-term and 15% long-term rates — your actual rates depend on your total income.
           </p>
         </div>
+
+        {/* Estimated tax callout */}
+        {summary.totalGains > 0 && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-0.5">Estimated Tax Bill</p>
+              <p className="text-2xl font-bold text-amber-900">{fmt(estimatedTotal)}</p>
+              <p className="text-xs text-amber-600 mt-0.5">Based on 22% short-term · 15% long-term rates</p>
+            </div>
+            <div className="text-3xl">💸</div>
+          </div>
+        )}
 
         {/* Tabs */}
         <div className="flex gap-1 bg-slate-100 p-1 rounded-xl mb-6 w-full sm:w-fit no-print">
@@ -419,10 +442,10 @@ function ResultsContent() {
           </div>
         )}
 
-        {/* Taxable events tab */}
+        {/* Taxable events tab — blurred paywall */}
         {activeTab === 'events' && (
           <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto relative">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200">
@@ -436,7 +459,8 @@ function ResultsContent() {
                   </tr>
                 </thead>
                 <tbody>
-                  {summary.taxableEvents.slice(0, 200).map((event, i) => (
+                  {/* Visible rows — first 3 free, all if paid */}
+                  {summary.taxableEvents.slice(0, isPaid ? 200 : 3).map((event, i) => (
                     <tr key={i} className={`border-b border-slate-100 ${i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}`}>
                       <td className="px-4 py-3 font-medium text-slate-800">{event.description}</td>
                       <td className="px-4 py-3 text-slate-500">{fmtDate(event.dateAcquired)}</td>
@@ -453,8 +477,33 @@ function ResultsContent() {
                       </td>
                     </tr>
                   ))}
+
+                  {/* Blurred preview rows (rows 4-6) when unpaid */}
+                  {!isPaid && summary.taxableEvents.length > 3 && summary.taxableEvents.slice(3, 6).map((event, i) => (
+                    <tr
+                      key={`blur-${i}`}
+                      className={`border-b border-slate-100 select-none pointer-events-none opacity-60 ${(i + 3) % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}`}
+                      style={{ filter: 'blur(4px)' }}
+                    >
+                      <td className="px-4 py-3 font-medium text-slate-800">{event.description}</td>
+                      <td className="px-4 py-3 text-slate-500">{fmtDate(event.dateAcquired)}</td>
+                      <td className="px-4 py-3 text-slate-500">{fmtDate(event.dateSold)}</td>
+                      <td className="px-4 py-3 text-right text-slate-700">{fmt(event.proceeds)}</td>
+                      <td className="px-4 py-3 text-right text-slate-700">{fmt(event.costBasis)}</td>
+                      <td className={`px-4 py-3 text-right font-semibold ${event.gain >= 0 ? 'text-red-500' : 'text-emerald-500'}`}>
+                        {event.gain >= 0 ? '+' : ''}{fmt(event.gain)}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${event.isLongTerm ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>
+                          {event.isLongTerm ? 'Long' : 'Short'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
-                {summary.taxableEvents.length > 200 && (
+
+                {/* Footer for paid + many events */}
+                {isPaid && summary.taxableEvents.length > 200 && (
                   <tfoot>
                     <tr>
                       <td colSpan={7} className="px-4 py-3 text-center text-sm text-slate-400">
@@ -464,6 +513,32 @@ function ResultsContent() {
                   </tfoot>
                 )}
               </table>
+
+              {/* Lock overlay */}
+              {!isPaid && summary.taxableEvents.length > 3 && (
+                <div
+                  className="absolute bottom-0 left-0 right-0 h-48 flex flex-col items-center justify-end pb-6 gap-3"
+                  style={{ background: 'linear-gradient(to top, white 45%, rgba(255,255,255,0.92) 70%, transparent 100%)' }}
+                >
+                  <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center shadow-sm">
+                    <span className="text-xl">🔒</span>
+                  </div>
+                  <p className="text-sm font-semibold text-slate-800">
+                    {summary.taxableEvents.length - 3} more taxable event{summary.taxableEvents.length - 3 !== 1 ? 's' : ''} locked
+                  </p>
+                  <button
+                    onClick={handleCheckout}
+                    disabled={isCheckingOut}
+                    className="bg-indigo-600 text-white text-sm font-semibold px-6 py-2.5 rounded-xl hover:bg-indigo-700 transition-colors disabled:opacity-60 flex items-center gap-2"
+                  >
+                    {isCheckingOut ? (
+                      <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> Loading...</>
+                    ) : (
+                      <>Unlock All — {PLAN_PRICES[recommendedPlan(summary.taxableEvents.length)]}</>
+                    )}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         )}
