@@ -63,6 +63,12 @@ export default function UploadPage() {
   const [isCalculating, setIsCalculating] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [arrowHover, setArrowHover] = useState(false)
+  const [showChecklist, setShowChecklist] = useState(false)
+  const [checklist, setChecklist] = useState({
+    otherExchanges: null as boolean | null,
+    transferredCoins: null as boolean | null,
+    hasDeFi: null as boolean | null,
+  })
 
   const MAX_FILE_BYTES = 10 * 1024 * 1024 // 10 MB
 
@@ -118,8 +124,18 @@ export default function UploadPage() {
     setLoadedFiles((prev) => prev.filter((f) => f.id !== id))
   }
 
+  const openChecklist = () => {
+    if (loadedFiles.length === 0) return
+    setChecklist({ otherExchanges: null, transferredCoins: null, hasDeFi: null })
+    setShowChecklist(true)
+  }
+
+  const checklistComplete = checklist.otherExchanges !== null && checklist.transferredCoins !== null && checklist.hasDeFi !== null
+  const checklistBlocked = checklist.otherExchanges === true || checklist.transferredCoins === true
+
   const calculateAll = () => {
     if (loadedFiles.length === 0) return
+    setShowChecklist(false)
     setIsCalculating(true)
 
     const allTransactions = loadedFiles.flatMap((f) => f.transactions)
@@ -135,6 +151,12 @@ export default function UploadPage() {
 
     router.push('/results')
   }
+
+  // Detect date range from loaded transactions
+  const allDates = loadedFiles.flatMap(f => f.transactions.map(t => t.date))
+  const earliestDate = allDates.length > 0 ? new Date(Math.min(...allDates.map(d => d.getTime()))) : null
+  const latestDate = allDates.length > 0 ? new Date(Math.max(...allDates.map(d => d.getTime()))) : null
+  const fmtYear = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
@@ -165,6 +187,111 @@ export default function UploadPage() {
 
   return (
     <div className="min-h-screen bg-slate-50">
+
+      {/* Verification checklist modal */}
+      {showChecklist && (
+        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center px-4">
+          <div className="bg-white rounded-3xl p-8 max-w-lg w-full shadow-2xl">
+            <div className="mb-6">
+              <h2 className="text-xl font-bold text-slate-900 mb-1">Quick accuracy check</h2>
+              <p className="text-sm text-slate-500">3 questions to make sure your results are complete and correct.</p>
+            </div>
+
+            {/* Date range detected */}
+            {earliestDate && latestDate && (
+              <div className="bg-slate-50 rounded-xl p-3 mb-6 flex items-center gap-3">
+                <span className="text-lg">📅</span>
+                <div>
+                  <p className="text-xs font-semibold text-slate-700">Date range detected in your files</p>
+                  <p className="text-sm text-slate-500">{fmtYear(earliestDate)} → {fmtYear(latestDate)} · {totalTransactions} transactions</p>
+                </div>
+              </div>
+            )}
+
+            {/* Question 1 */}
+            <div className="mb-5">
+              <p className="text-sm font-semibold text-slate-800 mb-2">
+                1. Did you trade on any exchanges <span className="text-indigo-600">not yet uploaded</span>?
+              </p>
+              <div className="flex gap-3">
+                {[{ label: 'Yes — I used other exchanges', val: true }, { label: 'No — this covers everything', val: false }].map(opt => (
+                  <button key={String(opt.val)} onClick={() => setChecklist(c => ({ ...c, otherExchanges: opt.val }))}
+                    className={`flex-1 py-2.5 px-3 rounded-xl text-sm font-medium border-2 transition-all ${checklist.otherExchanges === opt.val ? (opt.val ? 'border-amber-500 bg-amber-50 text-amber-700' : 'border-emerald-500 bg-emerald-50 text-emerald-700') : 'border-slate-200 text-slate-600 hover:border-slate-300'}`}>
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              {checklist.otherExchanges === true && (
+                <p className="text-xs text-amber-600 mt-2 flex items-center gap-1">⚠️ Please go back and upload those CSVs too — missing exchanges will make your cost basis incorrect.</p>
+              )}
+            </div>
+
+            {/* Question 2 */}
+            <div className="mb-5">
+              <p className="text-sm font-semibold text-slate-800 mb-2">
+                2. Did you <span className="text-indigo-600">transfer coins between exchanges</span> (e.g. bought on Coinbase, sold on Kraken)?
+              </p>
+              <div className="flex gap-3">
+                {[{ label: 'Yes — I moved coins between exchanges', val: true }, { label: 'No — each exchange is independent', val: false }].map(opt => (
+                  <button key={String(opt.val)} onClick={() => setChecklist(c => ({ ...c, transferredCoins: opt.val }))}
+                    className={`flex-1 py-2.5 px-3 rounded-xl text-sm font-medium border-2 transition-all ${checklist.transferredCoins === opt.val ? (opt.val ? 'border-amber-500 bg-amber-50 text-amber-700' : 'border-emerald-500 bg-emerald-50 text-emerald-700') : 'border-slate-200 text-slate-600 hover:border-slate-300'}`}>
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              {checklist.transferredCoins === true && (
+                <p className="text-xs text-amber-600 mt-2 flex items-center gap-1">⚠️ You need to upload CSVs from <strong>both</strong> exchanges so we can match the cost basis correctly.</p>
+              )}
+            </div>
+
+            {/* Question 3 */}
+            <div className="mb-6">
+              <p className="text-sm font-semibold text-slate-800 mb-2">
+                3. Do you have <span className="text-indigo-600">DeFi, NFT, or self-custody wallet</span> activity (MetaMask, Ledger, Uniswap)?
+              </p>
+              <div className="flex gap-3">
+                {[{ label: 'Yes — I used DeFi or self-custody', val: true }, { label: 'No — exchange only', val: false }].map(opt => (
+                  <button key={String(opt.val)} onClick={() => setChecklist(c => ({ ...c, hasDeFi: opt.val }))}
+                    className={`flex-1 py-2.5 px-3 rounded-xl text-sm font-medium border-2 transition-all ${checklist.hasDeFi === opt.val ? (opt.val ? 'border-amber-500 bg-amber-50 text-amber-700' : 'border-emerald-500 bg-emerald-50 text-emerald-700') : 'border-slate-200 text-slate-600 hover:border-slate-300'}`}>
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              {checklist.hasDeFi === true && (
+                <p className="text-xs text-amber-600 mt-2">⚠️ DeFi and self-custody wallets are not supported. Your results will be incomplete — consider a CPA for those transactions.</p>
+              )}
+            </div>
+
+            {/* Actions */}
+            {checklistBlocked ? (
+              <div className="space-y-3">
+                <p className="text-sm font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-xl p-3 text-center">
+                  Upload your missing exchange CSVs above first for accurate results.
+                </p>
+                <button onClick={() => setShowChecklist(false)} className="w-full py-3 border-2 border-slate-200 rounded-xl text-sm font-medium text-slate-700 hover:border-slate-300 transition-colors">
+                  ← Go back and add files
+                </button>
+                <button onClick={calculateAll} className="w-full py-3 text-sm text-slate-400 hover:text-slate-600 transition-colors">
+                  Calculate anyway (results may be incomplete)
+                </button>
+              </div>
+            ) : (
+              <div className="flex gap-3">
+                <button onClick={() => setShowChecklist(false)} className="flex-1 py-3 border-2 border-slate-200 rounded-xl text-sm font-medium text-slate-700 hover:border-slate-300 transition-colors">
+                  ← Back
+                </button>
+                <button
+                  onClick={calculateAll}
+                  disabled={!checklistComplete || isCalculating}
+                  className="flex-1 py-3 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 transition-colors disabled:opacity-50"
+                >
+                  {isCalculating ? 'Calculating...' : checklistComplete ? 'Calculate My Taxes →' : 'Answer all 3 questions'}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
       {/* Nav */}
       <nav className="bg-white border-b border-slate-100 px-6 py-4">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
@@ -384,7 +511,7 @@ export default function UploadPage() {
         {/* Calculate button */}
         {loadedFiles.length > 0 && (
           <button
-            onClick={calculateAll}
+            onClick={openChecklist}
             disabled={isCalculating}
             onMouseEnter={() => setArrowHover(true)}
             onMouseLeave={() => setArrowHover(false)}
