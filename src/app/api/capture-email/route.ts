@@ -32,8 +32,8 @@ export async function POST(req: NextRequest) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: 'CryptoTax Simple <leads@cryptotaxsimple.com>',
-        to: ['maysoonhaddad73@hotmail.com'],
+        from: 'CryptoTax Simple <onboarding@resend.dev>',
+        to: ['labibtanous@gmail.com'],
         subject: `New lead: ${email}`,
         html: `
           <h2>New CryptoTax lead</h2>
