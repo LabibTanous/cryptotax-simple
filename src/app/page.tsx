@@ -537,7 +537,7 @@ export default function LandingPage() {
           <div className="flex items-center gap-4 text-xs text-slate-500">
             <Link href="/privacy" className="hover:text-slate-300 transition-colors">Privacy Policy</Link>
             <Link href="/terms" className="hover:text-slate-300 transition-colors">Terms of Service</Link>
-            <span className="text-slate-600">© 2025 CryptoTax Simple</span>
+            <span className="text-slate-600">© {new Date().getFullYear()} CryptoTax Simple</span>
           </div>
         </div>
       </footer>

@@ -1,14 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function POST(req: NextRequest) {
-  const { email, totalGains, shortTermGains, longTermGains, taxableEvents } =
-    await req.json() as {
+  let email: string, totalGains: number, shortTermGains: number, longTermGains: number, taxableEvents: number
+  try {
+    const body = await req.json() as {
       email: string
       totalGains: number
       shortTermGains: number
       longTermGains: number
       taxableEvents: number
     }
+    email = body.email
+    totalGains = body.totalGains
+    shortTermGains = body.shortTermGains
+    longTermGains = body.longTermGains
+    taxableEvents = body.taxableEvents
+  } catch {
+    return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
+  }
 
   if (!email || !email.includes('@')) {
     return NextResponse.json({ error: 'Invalid email' }, { status: 400 })
@@ -19,6 +28,21 @@ export async function POST(req: NextRequest) {
   // If no Resend key, still succeed silently (don't block user)
   if (!resendKey) {
     return NextResponse.json({ ok: true })
+  }
+
+  const notifyEmail = process.env.NOTIFY_EMAIL
+  if (!notifyEmail) {
+    return NextResponse.json({ ok: true })
+  }
+
+  // Sanitize user-supplied data before embedding in HTML
+  function escapeHtml(str: string): string {
+    return str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#x27;')
   }
 
   const fmt = (n: number) =>
@@ -33,15 +57,15 @@ export async function POST(req: NextRequest) {
       },
       body: JSON.stringify({
         from: 'CryptoTax Simple <onboarding@resend.dev>',
-        to: ['labibtanous@gmail.com'],
-        subject: `New lead: ${email}`,
+        to: [notifyEmail],
+        subject: `New lead: ${escapeHtml(email)}`,
         html: `
           <h2>New CryptoTax lead</h2>
-          <p><strong>Email:</strong> ${email}</p>
+          <p><strong>Email:</strong> ${escapeHtml(email)}</p>
           <p><strong>Total gains/losses:</strong> ${fmt(totalGains)}</p>
           <p><strong>Short-term:</strong> ${fmt(shortTermGains)}</p>
           <p><strong>Long-term:</strong> ${fmt(longTermGains)}</p>
-          <p><strong>Taxable events:</strong> ${taxableEvents}</p>
+          <p><strong>Taxable events:</strong> ${Number(taxableEvents)}</p>
           <hr/>
           <p style="color:#888;font-size:12px">Sent from cryptotax-three.vercel.app</p>
         `,

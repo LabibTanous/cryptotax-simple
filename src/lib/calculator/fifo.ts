@@ -60,6 +60,7 @@ export function calculateFIFO(transactions: RawTransaction[]): TaxSummary {
       }
 
       case 'sell': {
+        if (tx.amount <= 0) break
         let remainingToSell = tx.amount
         const proceedsPerUnit = tx.amount > 0 ? tx.totalUsd / tx.amount : tx.priceUsd
 

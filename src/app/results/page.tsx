@@ -68,7 +68,13 @@ function ResultsContent() {
       router.push('/upload')
       return
     }
-    setSummary(JSON.parse(raw) as TaxSummary)
+    try {
+      setSummary(JSON.parse(raw) as TaxSummary)
+    } catch {
+      sessionStorage.removeItem('cryptotax_summary')
+      router.push('/upload')
+      return
+    }
     setExchange(sessionStorage.getItem('cryptotax_exchange') || '')
     setFilename(sessionStorage.getItem('cryptotax_filename') || 'transaction-history.csv')
 
@@ -623,12 +629,6 @@ function ResultsContent() {
               <p className="text-indigo-300 text-sm mt-3">
                 One-time · {summary.taxableEvents.length} taxable events · all assets · secure checkout via Stripe
               </p>
-              <button
-                onClick={() => { setIsPaid(true); sessionStorage.setItem('cryptotax_paid', 'true') }}
-                className="mt-4 text-indigo-400 hover:text-indigo-200 text-xs underline underline-offset-2 transition-colors"
-              >
-                Skip payment (test only)
-              </button>
             </>
           )}
         </div>

@@ -64,9 +64,17 @@ export default function UploadPage() {
   const [error, setError] = useState<string | null>(null)
   const [arrowHover, setArrowHover] = useState(false)
 
+  const MAX_FILE_BYTES = 10 * 1024 * 1024 // 10 MB
+
   const addFile = useCallback(
     async (csvFile: File) => {
       setError(null)
+
+      if (csvFile.size > MAX_FILE_BYTES) {
+        setError('File is too large. Maximum supported size is 10 MB. Please export a smaller date range.')
+        return
+      }
+
       setIsProcessing(true)
 
       try {
