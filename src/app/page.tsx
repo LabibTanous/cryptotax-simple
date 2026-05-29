@@ -346,6 +346,81 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ── Privacy differentiator ── */}
+      <section className="bg-white py-20 border-t border-slate-100">
+        <div className="max-w-6xl mx-auto px-6">
+          <div className="grid md:grid-cols-2 gap-12 items-center">
+            <div>
+              <p className="text-xs font-semibold text-indigo-600 uppercase tracking-widest mb-4">Built different</p>
+              <h2 className="text-4xl font-bold text-slate-900 leading-tight mb-6">
+                Your financial data<br />
+                <span className="text-indigo-600">cannot be breached.</span>
+              </h2>
+              <p className="text-lg text-slate-500 mb-6 leading-relaxed">
+                Every other crypto tax tool stores your transaction history on their servers.
+                That means data breaches, privacy risks, and trusting a company with your financial life.
+              </p>
+              <p className="text-lg text-slate-700 font-medium mb-8">
+                CryptoTax Simple runs 100% in your browser. Your CSV never leaves your device.
+                We calculate your taxes without ever seeing them.
+              </p>
+              <div className="space-y-3">
+                {[
+                  'Transaction history processed in your browser — never transmitted',
+                  'We cannot see, store, or lose your financial data',
+                  'No account means no breach surface',
+                  'Close the tab — all data is gone',
+                ].map(item => (
+                  <div key={item} className="flex items-start gap-3">
+                    <div className="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <svg width="10" height="10" fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                    </div>
+                    <span className="text-sm text-slate-600">{item}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-4">
+              {/* Comparison card */}
+              <div className="bg-red-50 border border-red-200 rounded-2xl p-6">
+                <p className="text-xs font-semibold text-red-600 uppercase tracking-wide mb-3">Other crypto tax tools</p>
+                <div className="space-y-2.5">
+                  {[
+                    'Store your full transaction history on their servers',
+                    'Require account creation with email + password',
+                    'Subject to data breaches (Koinly: Dec 2025)',
+                    'Can be subpoenaed for your financial data',
+                  ].map(item => (
+                    <div key={item} className="flex items-start gap-2.5">
+                      <span className="text-red-400 text-sm mt-0.5 flex-shrink-0">✕</span>
+                      <span className="text-sm text-red-700">{item}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-6">
+                <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wide mb-3">CryptoTax Simple</p>
+                <div className="space-y-2.5">
+                  {[
+                    'Zero data on our servers — mathematically impossible to breach',
+                    'No account required — nothing to hack',
+                    'Open architecture — you can verify the code yourself',
+                    'Close the tab — your data ceases to exist',
+                  ].map(item => (
+                    <div key={item} className="flex items-start gap-2.5">
+                      <span className="text-emerald-500 text-sm mt-0.5 flex-shrink-0">✓</span>
+                      <span className="text-sm text-emerald-800">{item}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* ── Pricing ── */}
       <section id="pricing" className="bg-white py-24">
         <div className="max-w-6xl mx-auto px-6">
