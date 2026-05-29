@@ -48,9 +48,11 @@ const EXCHANGES: { id: ExchangeType; name: string; icon: string; color: string; 
 
 interface LoadedFile {
   id: string
-  file: File
+  file: File | null
+  label?: string
   exchange: ExchangeType
   transactions: RawTransaction[]
+  warning?: string | null
 }
 
 export default function UploadPage() {
@@ -63,6 +65,9 @@ export default function UploadPage() {
   const [isCalculating, setIsCalculating] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [arrowHover, setArrowHover] = useState(false)
+  const [walletAddress, setWalletAddress] = useState('')
+  const [isFetchingWallet, setIsFetchingWallet] = useState(false)
+  const [walletError, setWalletError] = useState<string | null>(null)
   const [showChecklist, setShowChecklist] = useState(false)
   const [checklist, setChecklist] = useState({
     otherExchanges: null as boolean | null,
@@ -124,6 +129,54 @@ export default function UploadPage() {
     setLoadedFiles((prev) => prev.filter((f) => f.id !== id))
   }
 
+  const fetchWallet = async () => {
+    const addr = walletAddress.trim()
+    if (!addr) return
+    setWalletError(null)
+    setIsFetchingWallet(true)
+    try {
+      const res = await fetch('/api/wallet', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address: addr, chain: 'eth' }),
+      })
+      const data = await res.json() as {
+        transactions?: Array<{ date: string; type: string; asset: string; amount: number; priceUsd: number; feeUsd: number; totalUsd: number; notes?: string }>
+        transactionCount?: number
+        warning?: string | null
+        error?: string
+      }
+      if (!res.ok || data.error) {
+        setWalletError(data.error || 'Failed to fetch wallet transactions.')
+        return
+      }
+      const transactions: RawTransaction[] = (data.transactions || []).map(t => ({
+        ...t,
+        date: new Date(t.date),
+        type: t.type as RawTransaction['type'],
+      }))
+      if (transactions.length === 0) {
+        setWalletError('No transactions found for this address.')
+        return
+      }
+      setLoadedFiles(prev => {
+        const filtered = prev.filter(f => f.exchange !== 'wallet_eth')
+        return [...filtered, {
+          id: crypto.randomUUID(),
+          file: null,
+          label: `ETH Wallet ${addr.slice(0, 6)}...${addr.slice(-4)}`,
+          exchange: 'wallet_eth',
+          transactions,
+          warning: data.warning,
+        }]
+      })
+      setWalletAddress('')
+    } catch {
+      setWalletError('Network error. Please try again.')
+    }
+    setIsFetchingWallet(false)
+  }
+
   const openChecklist = () => {
     if (loadedFiles.length === 0) return
     setChecklist({ otherExchanges: null, transferredCoins: null, hasDeFi: null })
@@ -142,7 +195,7 @@ export default function UploadPage() {
     const summary = calculateFIFO(allTransactions)
 
     const exchangeNames = loadedFiles.map((f) => f.exchange).join('+')
-    const fileNames = loadedFiles.map((f) => f.file.name).join(', ')
+    const fileNames = loadedFiles.map((f) => f.label || f.file?.name || f.exchange).join(', ')
 
     sessionStorage.setItem('cryptotax_summary', JSON.stringify(summary))
     sessionStorage.setItem('cryptotax_exchange', exchangeNames)
@@ -400,41 +453,74 @@ export default function UploadPage() {
           <div className="mb-6 space-y-2">
             {loadedFiles.map((lf) => {
               const ex = EXCHANGES.find((e) => e.id === lf.exchange)
+              const isWallet = lf.exchange === 'wallet_eth' || lf.exchange === 'wallet_btc'
               const borderColor =
-                lf.exchange === 'coinbase'
-                  ? 'border-l-blue-400'
-                  : lf.exchange === 'kraken'
-                  ? 'border-l-purple-400'
-                  : 'border-l-yellow-400'
+                lf.exchange === 'coinbase' ? 'border-l-blue-400' :
+                lf.exchange === 'kraken' ? 'border-l-purple-400' :
+                lf.exchange === 'binance' ? 'border-l-yellow-400' :
+                'border-l-indigo-400'
               return (
-                <div
-                  key={lf.id}
-                  className={`flex items-center justify-between bg-white border border-slate-200 border-l-4 ${borderColor} rounded-xl px-4 py-3.5 shadow-sm`}
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="text-xl">{ex?.icon}</span>
-                    <div>
-                      <p className="text-sm font-semibold text-slate-800 capitalize">{lf.exchange}</p>
-                      <p className="text-xs text-slate-400 mt-0.5">{lf.file.name} · {lf.transactions.length} transactions</p>
+                <div key={lf.id} className="space-y-1">
+                  <div className={`flex items-center justify-between bg-white border border-slate-200 border-l-4 ${borderColor} rounded-xl px-4 py-3.5 shadow-sm`}>
+                    <div className="flex items-center gap-3">
+                      <span className="text-xl">{isWallet ? '🔷' : ex?.icon}</span>
+                      <div>
+                        <p className="text-sm font-semibold text-slate-800">
+                          {isWallet ? lf.label : lf.exchange.charAt(0).toUpperCase() + lf.exchange.slice(1)}
+                        </p>
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          {lf.file ? lf.file.name + ' · ' : ''}{lf.transactions.length} transactions
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs text-emerald-600 font-medium bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">Ready</span>
+                      <button
+                        onClick={() => removeFile(lf.id)}
+                        aria-label="Remove file"
+                        className="text-slate-300 hover:text-red-400 transition-colors text-xl leading-none w-6 h-6 flex items-center justify-center rounded-md hover:bg-red-50"
+                      >×</button>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs text-emerald-600 font-medium bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
-                      Ready
-                    </span>
-                    <button
-                      onClick={() => removeFile(lf.id)}
-                      className="text-slate-300 hover:text-red-400 transition-colors text-xl leading-none w-6 h-6 flex items-center justify-center rounded-md hover:bg-red-50"
-                      title="Remove"
-                    >
-                      ×
-                    </button>
-                  </div>
+                  {lf.warning && (
+                    <p className="text-xs text-amber-600 px-2 flex items-center gap-1">⚠️ {lf.warning}</p>
+                  )}
                 </div>
               )
             })}
           </div>
         )}
+
+        {/* Wallet address lookup */}
+        <div className="mb-6">
+          <p className="text-sm font-semibold text-slate-700 mb-3">Add ETH wallet address <span className="font-normal text-slate-400">(optional — no CSV needed)</span></p>
+          <div className="bg-white border border-slate-200 rounded-2xl p-5">
+            <div className="flex gap-3 mb-3">
+              <div className="flex items-center gap-2 flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
+                <span className="text-lg">🔷</span>
+                <input
+                  type="text"
+                  value={walletAddress}
+                  onChange={e => { setWalletAddress(e.target.value); setWalletError(null) }}
+                  onKeyDown={e => e.key === 'Enter' && fetchWallet()}
+                  placeholder="0x71C7656EC7ab88b098defB751B7401B5f6d8976F"
+                  className="flex-1 bg-transparent text-sm text-slate-800 placeholder-slate-400 focus:outline-none font-mono"
+                />
+              </div>
+              <button
+                onClick={fetchWallet}
+                disabled={!walletAddress.trim() || isFetchingWallet}
+                className="px-5 py-3 bg-indigo-600 text-white text-sm font-semibold rounded-xl hover:bg-indigo-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+              >
+                {isFetchingWallet ? (
+                  <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Fetching...</>
+                ) : 'Import →'}
+              </button>
+            </div>
+            {walletError && <p className="text-xs text-red-600 flex items-center gap-1">⚠️ {walletError}</p>}
+            <p className="text-xs text-slate-400">Pulls all ETH transactions automatically via Etherscan. Wallet activity is classified as transfers — upload exchange CSVs for accurate cost basis.</p>
+          </div>
+        </div>
 
         {/* Upload zone */}
         <div className="mb-6">

@@ -1,4 +1,4 @@
-export type ExchangeType = 'coinbase' | 'kraken' | 'binance'
+export type ExchangeType = 'coinbase' | 'kraken' | 'binance' | 'wallet_eth' | 'wallet_btc'
 
 export interface RawTransaction {
   date: Date

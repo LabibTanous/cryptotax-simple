@@ -11,6 +11,8 @@ export function parseCSV(csvText: string, exchange: ExchangeType): RawTransactio
       return parseKrakenCSV(csvText)
     case 'binance':
       return parseBinanceCSV(csvText)
+    default:
+      return []
   }
 }
 
