@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { rateLimit, getIp } from '@/lib/rate-limit'
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 export async function POST(req: NextRequest) {
+  if (!rateLimit(getIp(req), 5, 60_000)) {
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+  }
+
   let email: string, totalGains: number, shortTermGains: number, longTermGains: number, taxableEvents: number
   try {
     const body = await req.json() as {
@@ -19,7 +26,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
   }
 
-  if (!email || !email.includes('@')) {
+  if (!email || !EMAIL_REGEX.test(email)) {
     return NextResponse.json({ error: 'Invalid email' }, { status: 400 })
   }
 

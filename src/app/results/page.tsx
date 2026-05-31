@@ -61,6 +61,7 @@ function ResultsContent() {
   const [email, setEmail] = useState('')
   const [emailSubmitting, setEmailSubmitting] = useState(false)
   const [emailDone, setEmailDone] = useState(false)
+  const [downloadSuccess, setDownloadSuccess] = useState(false)
 
   useEffect(() => {
     const raw = sessionStorage.getItem('cryptotax_summary')
@@ -98,7 +99,8 @@ function ResultsContent() {
 
   const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!summary || !email.includes('@')) return
+    const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!summary || !emailRe.test(email)) return
     setEmailSubmitting(true)
     try {
       await fetch('/api/capture-email', {
@@ -128,6 +130,8 @@ function ResultsContent() {
     setIsDownloading(true)
     try {
       await downloadForm8949PDF(summary, filename)
+      setDownloadSuccess(true)
+      setTimeout(() => setDownloadSuccess(false), 3000)
     } catch (err) {
       console.error(err)
       alert('PDF generation failed. Please try again.')
@@ -197,7 +201,7 @@ function ResultsContent() {
             />
             <button
               type="submit"
-              disabled={emailSubmitting || !email.includes('@')}
+              disabled={emailSubmitting || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)}
               className="w-full bg-indigo-600 text-white font-semibold py-3 rounded-xl hover:bg-indigo-700 transition-colors disabled:opacity-60"
             >
               {emailSubmitting ? 'Loading...' : 'View My Tax Report →'}
@@ -206,9 +210,9 @@ function ResultsContent() {
 
           <button
             onClick={() => { setEmailGate(false); setEmailDone(true); sessionStorage.setItem('cryptotax_email_done', 'true') }}
-            className="mt-3 w-full text-center text-xs text-slate-400 hover:text-slate-600 transition-colors"
+            className="mt-3 w-full text-center text-sm text-slate-500 hover:text-slate-700 transition-colors py-2 border border-slate-200 rounded-xl hover:bg-slate-50"
           >
-            Skip for now
+            View report without email →
           </button>
 
           <p className="text-center text-xs text-slate-400 mt-4">No spam. Unsubscribe anytime.</p>
@@ -220,6 +224,10 @@ function ResultsContent() {
   const estimatedShortTax = Math.max(0, summary.shortTermGains) * 0.22
   const estimatedLongTax = Math.max(0, summary.longTermGains) * 0.15
   const estimatedTotal = estimatedShortTax + estimatedLongTax
+
+  const taxYear = summary.taxableEvents.length > 0
+    ? Math.max(...summary.taxableEvents.map(e => new Date(e.dateSold).getFullYear()))
+    : new Date().getFullYear() - 1
 
   const assetList = Object.entries(summary.assets).sort((a, b) => Math.abs(b[1].realizedGain) - Math.abs(a[1].realizedGain))
   const shortTermEvents = summary.taxableEvents.filter((e) => !e.isLongTerm)
@@ -265,6 +273,13 @@ function ResultsContent() {
 
   return (
     <div className="min-h-screen bg-slate-50">
+      {/* Download success toast */}
+      {downloadSuccess && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-emerald-600 text-white text-sm font-semibold px-5 py-3 rounded-xl shadow-lg flex items-center gap-2 animate-fade-in no-print">
+          ✓ Form 8949 saved to Downloads
+        </div>
+      )}
+
       {/* Nav */}
       <nav className="bg-white border-b border-slate-100 px-6 py-4 no-print">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
@@ -274,6 +289,16 @@ function ResultsContent() {
             </div>
             <span className="font-semibold text-slate-900 hidden sm:inline">CryptoTax Simple</span>
           </Link>
+          <div className="hidden sm:flex items-center gap-2 text-sm text-slate-500">
+            <span className="w-6 h-6 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center text-xs font-bold">✓</span>
+            <span className="text-slate-400">Upload</span>
+            <span className="text-slate-300 mx-1">→</span>
+            <span className="w-6 h-6 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center text-xs font-bold">2</span>
+            <span className="text-slate-700 font-medium">Review</span>
+            <span className="text-slate-300 mx-1">→</span>
+            <span className="w-6 h-6 bg-slate-100 text-slate-400 rounded-full flex items-center justify-center text-xs font-bold">3</span>
+            <span>Download</span>
+          </div>
           <div className="flex items-center gap-3">
             <Link href="/upload" className="hidden sm:flex text-sm text-slate-500 hover:text-slate-700 items-center gap-1">
               ← Upload another file
@@ -313,7 +338,7 @@ function ResultsContent() {
             </p>
           </div>
           <div className="text-right text-xs sm:text-sm text-slate-400 flex-shrink-0">
-            Tax year {new Date().getFullYear() - 1}
+            Tax year {taxYear}
           </div>
         </div>
 
@@ -451,6 +476,7 @@ function ResultsContent() {
         {/* Taxable events tab — blurred paywall */}
         {activeTab === 'events' && (
           <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+            <p className="sm:hidden text-xs text-slate-400 px-4 pt-3 pb-1 flex items-center gap-1">← Scroll to see all columns →</p>
             <div className="overflow-x-auto relative">
               <table className="w-full text-sm">
                 <thead>

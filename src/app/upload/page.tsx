@@ -76,6 +76,7 @@ export default function UploadPage() {
   })
 
   const MAX_FILE_BYTES = 10 * 1024 * 1024 // 10 MB
+  const ETH_ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/
 
   const addFile = useCallback(
     async (csvFile: File) => {
@@ -132,6 +133,10 @@ export default function UploadPage() {
   const fetchWallet = async () => {
     const addr = walletAddress.trim()
     if (!addr) return
+    if (!ETH_ADDRESS_RE.test(addr)) {
+      setWalletError('Invalid Ethereum address. Must start with 0x followed by 40 hex characters.')
+      return
+    }
     setWalletError(null)
     setIsFetchingWallet(true)
     try {
@@ -230,6 +235,11 @@ export default function UploadPage() {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files?.[0]
     if (selected) {
+      if (!selected.name.endsWith('.csv')) {
+        setError('Please upload a CSV file.')
+        e.target.value = ''
+        return
+      }
       addFile(selected)
       e.target.value = ''
     }
@@ -518,6 +528,7 @@ export default function UploadPage() {
               </button>
             </div>
             {walletError && <p className="text-xs text-red-600 flex items-center gap-1">⚠️ {walletError}</p>}
+            {isFetchingWallet && <p className="text-xs text-indigo-500 flex items-center gap-1">⏳ Fetching from Etherscan — this can take 10–20 seconds for large wallets...</p>}
             <p className="text-xs text-slate-400">Pulls all ETH transactions automatically via Etherscan. Wallet activity is classified as transfers — upload exchange CSVs for accurate cost basis.</p>
           </div>
         </div>

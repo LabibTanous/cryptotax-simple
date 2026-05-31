@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
+import { rateLimit, getIp } from '@/lib/rate-limit'
 
 const PLANS = {
   simple:   { price: 2900, label: 'CryptoTax Simple — Up to 100 transactions' },
@@ -8,6 +9,10 @@ const PLANS = {
 }
 
 export async function POST(req: NextRequest) {
+  if (!rateLimit(getIp(req), 10, 60_000)) {
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+  }
+
   const stripeKey = process.env.STRIPE_SECRET_KEY
   if (!stripeKey) {
     return NextResponse.json({ error: 'Stripe not configured' }, { status: 500 })
@@ -28,7 +33,7 @@ export async function POST(req: NextRequest) {
   const planKey = (plan as keyof typeof PLANS) in PLANS ? (plan as keyof typeof PLANS) : 'simple'
   const selected = PLANS[planKey]
 
-  const origin = req.headers.get('origin') || 'https://cryptotax-three.vercel.app'
+  const origin = process.env.NEXT_PUBLIC_SITE_URL || 'https://cryptotax-three.vercel.app'
 
   try {
     const session = await stripe.checkout.sessions.create({

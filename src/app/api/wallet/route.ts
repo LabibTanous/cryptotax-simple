@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import type { RawTransaction } from '@/lib/types'
+import { rateLimit, getIp } from '@/lib/rate-limit'
+
+const ETH_ADDRESS_REGEX = /^0x[a-fA-F0-9]{40}$/
 
 const ETHERSCAN_KEY = process.env.ETHERSCAN_API_KEY || ''
 const ETHERSCAN = 'https://api.etherscan.io/api'
@@ -78,6 +81,10 @@ function nearestPrice(priceMap: Map<string, number>, ts: number): number {
 }
 
 export async function POST(req: NextRequest) {
+  if (!rateLimit(getIp(req), 10, 60_000)) {
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+  }
+
   let address: string
   let chain: string
   try {
@@ -89,6 +96,10 @@ export async function POST(req: NextRequest) {
   }
 
   if (!address) return NextResponse.json({ error: 'Address required' }, { status: 400 })
+
+  if (chain === 'eth' && !ETH_ADDRESS_REGEX.test(address)) {
+    return NextResponse.json({ error: 'Invalid Ethereum address. Must be 0x followed by 40 hex characters.' }, { status: 400 })
+  }
 
   if (chain === 'eth') {
     // Fetch normal ETH transactions
